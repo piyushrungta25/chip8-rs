@@ -234,9 +234,7 @@ impl Chip8 {
 
     fn update_sound_timer(&mut self) {
         if self.sound_timer > 0 {
-            if self.sound_timer == 1 {
-                println!("beep beep!");
-            }
+            println!("beep beep!");
             self.sound_timer -= 1;
         }
     }
