@@ -31,6 +31,19 @@ enum Instruction {
     JumpRelV0(usize),
     RandomAND(usize, u8),
 
+    SkipIfKey(usize),
+    SkipIfNotKey(usize),
+
+    SetToDelayTimer(usize),
+    GetKeyPress(usize),
+    SetDelayTimer(usize),
+    SetSoundTimer(usize),
+    AddToIndexRegister(usize),
+    SetIndexToSpriteAddr(usize),
+    BCD(usize),
+    DumpRegistersTill(usize),
+    LoadRegistersTill(usize),
+
     ClearScreen,
     Return,
     Noop,
@@ -52,7 +65,7 @@ struct Chip8 {
 
 impl Chip8 {
     fn new() -> Self {
-        Chip8 {
+        let mut c8 = Chip8 {
             memory: vec![0; 4096],  // 4k memory
             registers: vec![0; 16], // 16 8-bit registers
             index: 0,
@@ -64,7 +77,129 @@ impl Chip8 {
             call_stack: vec![0; 16],
             sp: 0,
             keypad: vec![0; 16],
-        }
+        };
+
+        c8.load_fonts();
+        c8
+    }
+
+    fn load_fonts(&mut self) {
+        let chip8_fontset: [u8; 80] =[
+            // Zero
+            0b11110000,
+            0b10010000,
+            0b10010000,
+            0b10010000,
+            0b11110000,
+
+            // One
+            0b00100000,
+            0b01100000,
+            0b00100000,
+            0b00100000,
+            0b01110000,
+
+            // Two
+            0b11110000,
+            0b00010000,
+            0b11110000,
+            0b10000000,
+            0b11110000,
+
+            // Three
+            0b11110000,
+            0b00010000,
+            0b11110000,
+            0b00010000,
+            0b11110000,
+
+            // Four
+            0b10010000,
+            0b10010000,
+            0b11110000,
+            0b00010000,
+            0b00010000,
+
+            // Five
+            0b11110000,
+            0b10000000,
+            0b11110000,
+            0b00010000,
+            0b11110000,
+
+            // Six
+            0b11110000,
+            0b10000000,
+            0b11110000,
+            0b10010000,
+            0b11110000,
+
+            // Seven
+            0b11110000,
+            0b00010000,
+            0b00100000,
+            0b01000000,
+            0b01000000,
+
+            // Eight
+            0b11110000,
+            0b10010000,
+            0b11110000,
+            0b10010000,
+            0b11110000,
+
+            // Nine
+            0b11110000,
+            0b10010000,
+            0b11110000,
+            0b00010000,
+            0b11110000,
+
+            // A
+            0b11110000,
+            0b10010000,
+            0b11110000,
+            0b10010000,
+            0b10010000,
+
+            // B
+            0b11100000,
+            0b10010000,
+            0b11100000,
+            0b10010000,
+            0b11100000,
+
+            // C
+            0b11110000,
+            0b10000000,
+            0b10000000,
+            0b10000000,
+            0b11110000,
+
+            // D
+            0b11100000,
+            0b10010000,
+            0b10010000,
+            0b10010000,
+            0b11100000,
+
+            // E
+            0b11110000,
+            0b10000000,
+            0b11110000,
+            0b10000000,
+            0b11110000,
+
+            // F
+            0b11110000,
+            0b10000000,
+            0b11110000,
+            0b10000000,
+            0b10000000,
+        ];
+
+        self.memory[0x50..0xA0].copy_from_slice(&chip8_fontset);
+
     }
 
     fn decode(&mut self, oc: Opcode) -> Instruction {
@@ -108,6 +243,35 @@ impl Chip8 {
             0xA000 => Instruction::SetIndex(nnn),
             0xB000 => Instruction::JumpRelV0(nnn),
             0xC000 => Instruction::RandomAND(reg1, nn),
+
+            // TODO 0cDxxx draw it
+
+            0xE000 => {
+                match oc & 0x00FF {
+                    0x009E => Instruction::SkipIfKey(reg1),
+                    0x00A1 => Instruction::SkipIfNotKey(reg1),
+                    _ => Instruction::Noop
+                }
+            },
+
+            0xF000 => {
+                match oc & 0x00FF {
+                    0x0007 => Instruction::SetToDelayTimer(reg1),
+                    0x000A => Instruction::GetKeyPress(reg1),
+                    0x0015 => Instruction::SetDelayTimer(reg1),
+                    0x0018 => Instruction::SetSoundTimer(reg1),
+                    0x001E => Instruction::AddToIndexRegister(reg1),
+                    0x0029 => Instruction::SetIndexToSpriteAddr(reg1),
+                    0x0033 => Instruction::BCD(reg1),
+                    0x0055 => Instruction::DumpRegistersTill(reg1),
+                    0x0065 => Instruction::LoadRegistersTill(reg1),
+                    _ => Instruction::Noop,
+                }
+            }
+
+
+
+
 
             _ => Instruction::Noop,
         };
@@ -213,9 +377,73 @@ impl Chip8 {
                 let random_byte: u8 = random();
                 self.registers[reg] = random_byte & val;
             }
+            Instruction::SkipIfKey(reg) => {
+                self.pc += 2;
+                if self.get_key_press() == self.registers[reg] {
+                    self.pc += 2;
+                }
+            }
+            Instruction::SkipIfNotKey(reg) => {
+                self.pc += 2;
+                if self.get_key_press() != self.registers[reg] {
+                    self.pc += 2;
+                }
+            }
+            Instruction::SetToDelayTimer(reg) => {
+                self.pc += 2;
+                self.registers[reg] = self.delay_timer;
+            }
+            Instruction::GetKeyPress(reg) => {
+                self.pc += 2;
+                self.registers[reg] = self.get_key_press();
+            }
+            Instruction::SetDelayTimer(reg) => {
+                self.pc += 2;
+                self.delay_timer = self.registers[reg];
+            }
+            Instruction::SetSoundTimer(reg) => {
+                self.pc += 2;
+                self.sound_timer = self.registers[reg];
+            }
+            Instruction::AddToIndexRegister(reg) => {
+                self.pc += 2;
+                let (res, overflow) = self.index.overflowing_add(self.registers[reg] as usize);
+                self.index = res;
+                self.registers[15] = if overflow { 1 } else { 2 };
+            }
+            Instruction::SetIndexToSpriteAddr(reg) => {
+                self.pc += 2;
+                let vx = self.registers[reg];
+                self.index = 0x50 + (5*vx as usize);
+            }
+            Instruction::BCD(reg) => {
+                self.pc += 2;
+                let mut vx = self.registers[reg];
+                for i in 0..3 {
+                    self.memory[self.index+2-i] =  vx%10;
+                    vx /= 10;
+                }
+            }
+            Instruction::DumpRegistersTill(reg) => {
+                self.pc += 2;
+                for i in 0..(reg as u8) {
+                    self.memory[self.index + (i as usize)] = self.registers[i as usize];
+                }
+            }
+            Instruction::LoadRegistersTill(reg) => {
+                self.pc += 2;
+                for i in 0..(reg as u8) {
+                    self.registers[i as usize] = self.memory[self.index + (i as usize)];
+                }
+            }
 
             _ => {}
         }
+    }
+
+    fn get_key_press(&mut self) -> u8 {
+        // TODO this should be blocking
+        return '1' as u8;
     }
 
     fn clear_screen(&mut self) {
@@ -246,8 +474,6 @@ impl Chip8 {
 
 fn main() {
     let mut c8 = Chip8::new();
-
-    // TODO load font set in memory
 
     loop {
         let oc = c8.fetch();
