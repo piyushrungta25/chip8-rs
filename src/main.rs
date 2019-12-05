@@ -298,8 +298,9 @@ impl Chip8 {
 
                 let mut did_overflow: bool = false;
                 for i in 0usize..(height as usize) {
+                    let mut word = self.memory[self.index + i];
                     for j in 0usize..8 {
-                        let new_val: bool = self.memory[(self.index + 8 * i + j) as usize] != 0;
+                        let new_val: bool  = ( (word >> (7-j)) % 2) != 0;
                         let tx = x + j;
                         let ty = y + i;
                         let cur_val = self.pixel_buffer[ty][tx];
@@ -454,7 +455,7 @@ fn main() {
     // File::open("roms/UFO").unwrap().read_to_end(&mut data);
 
     // this should put 5 in top left corner
-    let mut data: Vec<u8> = vec![0x00, 0xE0, 0x61, 0x03, 0xF1, 0x29, 0x61, 0x00, 0x62, 0x00, 0xD1, 0x25, 0x00, 0x0F, 0x12, 0x0C];
+    let mut data: Vec<u8> = vec![0x00, 0xE0, 0x61, 0x0d, 0xF1, 0x29, 0x61, 0x00, 0x62, 0x00, 0xD1, 0x25, 0x00, 0x0F, 0x12, 0x0C];
 
     c8.load_rom(data);
     let mut event_pump = sdl_context.event_pump().unwrap();
