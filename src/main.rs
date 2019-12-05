@@ -1,5 +1,15 @@
+extern crate sdl2;
+
 use rand::prelude::*;
 use std::{thread, time};
+use sdl2::pixels::Color;
+use sdl2::rect::{Point, Rect};
+use sdl2::render::Canvas;
+use sdl2::video::Window;
+use std::fs::File;
+use std::io::Read;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
 type Opcode = u16;
 
@@ -61,10 +71,12 @@ struct Chip8 {
 
     call_stack: Vec<usize>,
     keypad: Vec<bool>,
+
+    canvas: Canvas<Window>,
 }
 
 impl Chip8 {
-    fn new() -> Self {
+    fn new(canvas: Canvas<Window>) -> Self {
         let mut c8 = Chip8 {
             memory: vec![0; 4096],  // 4k memory
             registers: vec![0; 16], // 16 8-bit registers
@@ -76,6 +88,7 @@ impl Chip8 {
 
             call_stack: vec![0; 16],
             keypad: vec![false; 16],
+            canvas
         };
 
         c8.load_fonts();
@@ -107,10 +120,11 @@ impl Chip8 {
     }
 
     fn decode(&mut self, oc: Opcode) -> Instruction {
-        let reg1: usize = (oc & 0x0F00) as usize;
-        let reg2: usize = (oc & 0x00F0) as usize;
+        let reg1: usize = ((oc & 0x0F00)/(16*16)) as usize;
+        let reg2: usize = ((oc & 0x00F0)/16) as usize;
         let nnn: usize = (oc & 0x0FFF) as usize;
         let nn: u8 = (oc & 0x00FF) as u8;
+
 
         return match oc & 0xF000 {
             0x0000 => match oc & 0x000F {
@@ -174,10 +188,6 @@ impl Chip8 {
 
             _ => Instruction::Noop,
         };
-    }
-
-    fn render_framebuffer(&mut self) {
-        // TODO
     }
 
     fn execute(&mut self, instruction: Instruction) {
@@ -277,10 +287,12 @@ impl Chip8 {
                 self.pc = val.wrapping_add(self.registers[0] as usize);
             }
             Instruction::RandomAND(reg, val) => {
+                self.pc += 2;
                 let random_byte: u8 = random();
                 self.registers[reg] = random_byte & val;
             }
             Instruction::Draw(reg1, reg2, height) => {
+                self.pc += 2;
                 let x = self.registers[reg1] as usize;
                 let y = self.registers[reg2] as usize;
 
@@ -299,7 +311,7 @@ impl Chip8 {
                 }
 
                 self.registers[15] = if did_overflow { 1 } else { 0 };
-                self.render_framebuffer();
+                self.rerender();
             }
             Instruction::SkipIfKey(reg) => {
                 self.pc += 2;
@@ -365,6 +377,23 @@ impl Chip8 {
         }
     }
 
+
+
+    fn rerender(&mut self) {
+        self.canvas.set_draw_color(Color::RGB(0,0,0));
+        self.canvas.clear();
+        self.canvas.set_draw_color(Color::RGB(255,255,255));
+        for y in 0..32 {
+            for x in 0..64 {
+                if self.pixel_buffer[y][x] {
+                    self.canvas.fill_rect(Rect::new((x*10) as i32, (y*10) as i32, 10, 10));
+                }
+            }
+        }
+        self.canvas.present();
+    }
+
+
     fn get_key_press(&mut self) -> u8 {
         // TODO this should be blocking
         return '1' as u8;
@@ -372,6 +401,7 @@ impl Chip8 {
 
     fn clear_screen(&mut self) {
         self.pixel_buffer = vec![vec![false; 64]; 32];
+        self.rerender()
     }
 
     fn fetch(&self) -> Opcode {
@@ -394,12 +424,51 @@ impl Chip8 {
     fn sleep() {
         thread::sleep(time::Duration::from_millis(16));
     }
+
+    fn load_rom(&mut self, data: Vec<u8>) {
+        self.memory[0x200..(0x200 + data.len())].copy_from_slice(&data);
+
+    }
+
 }
 
 fn main() {
-    let mut c8 = Chip8::new();
 
-    loop {
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let mut window = video_subsystem.window("rust-sdl2 demo", 640, 320)
+        .position_centered()
+        .build()
+        .unwrap();
+    // window.set_fullscreen(FullscreenType::True).unwrap();
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    canvas.set_draw_color(Color::RGB(0,0,0));
+    canvas.clear();
+    canvas.present();
+    let mut c8 = Chip8::new(canvas);
+
+    // let mut data: Vec<u8> = Vec::new();
+    // File::open("roms/INVADERS").unwrap().read_to_end(&mut data);
+    // File::open("roms/UFO").unwrap().read_to_end(&mut data);
+
+    // this should put 5 in top left corner
+    let mut data: Vec<u8> = vec![0x00, 0xE0, 0x61, 0x03, 0xF1, 0x29, 0x61, 0x00, 0x62, 0x00, 0xD1, 0x25, 0x00, 0x0F, 0x12, 0x0C];
+
+    c8.load_rom(data);
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+                _ => {}
+            }
+        }
         let oc = c8.fetch();
         let inst = c8.decode(oc);
         c8.execute(inst);
