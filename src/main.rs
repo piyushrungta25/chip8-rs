@@ -30,6 +30,7 @@ enum Instruction {
 
     JumpRelV0(usize),
     RandomAND(usize, u8),
+    Draw(usize, usize, u8),
 
     SkipIfKey(usize),
     SkipIfNotKey(usize),
@@ -54,7 +55,7 @@ struct Chip8 {
     registers: Vec<u8>,
     index: usize, // index register
     pc: usize,    // program counter
-    pixel_buffer: Vec<bool>,
+    pixel_buffer: Vec<Vec<bool>>,
     delay_timer: u8,
     sound_timer: u8,
 
@@ -70,7 +71,7 @@ impl Chip8 {
             registers: vec![0; 16], // 16 8-bit registers
             index: 0,
             pc: 0x200,                          // program counter starts at 0x200
-            pixel_buffer: vec![false; 64 * 32], // 2048 pixels
+            pixel_buffer: vec![vec![false; 64]; 32], // 2048 pixels
             delay_timer: 0,
             sound_timer: 0,
 
@@ -244,7 +245,10 @@ impl Chip8 {
             0xB000 => Instruction::JumpRelV0(nnn),
             0xC000 => Instruction::RandomAND(reg1, nn),
 
-            // TODO 0cDxxx draw it
+            0xD000 => {
+                let height = (oc & 0x000F) as u8;
+                Instruction::Draw(reg1, reg2, height)
+            },
 
             0xE000 => {
                 match oc & 0x00FF {
@@ -270,11 +274,12 @@ impl Chip8 {
             }
 
 
-
-
-
             _ => Instruction::Noop,
         };
+    }
+
+    fn render_framebuffer(&mut self) {
+        // TODO
     }
 
     fn execute(&mut self, instruction: Instruction) {
@@ -376,6 +381,28 @@ impl Chip8 {
             Instruction::RandomAND(reg, val) => {
                 let random_byte: u8 = random();
                 self.registers[reg] = random_byte & val;
+            }
+            Instruction::Draw(reg1, reg2, height) => {
+                let x = self.registers[reg1];
+                let y = self.registers[reg2];
+
+                let mut did_overflow: bool = false;
+                for i in 0..height {
+                	for j in 0..8 {
+                		let new_val: bool = (self.memory[(self.index + 8*i + j) as usize] != 0);
+                		let tx = x+j;
+                		let ty = y+i;
+                		let cur_val = self.pixel_buffer[ty][tx];
+                		if cur_val != new_val {
+                			did_overflow = true;
+                		}
+                		self.pixel_buffer[ty][tx] = new_val;
+                	}
+                }
+
+                self.registers[15] = if did_overflow { 1 } else { 0 };
+                self.render_framebuffer();
+
             }
             Instruction::SkipIfKey(reg) => {
                 self.pc += 2;
