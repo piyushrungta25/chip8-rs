@@ -70,7 +70,7 @@ impl Chip8 {
             memory: vec![0; 4096],  // 4k memory
             registers: vec![0; 16], // 16 8-bit registers
             index: 0,
-            pc: 0x200,                          // program counter starts at 0x200
+            pc: 0x200,                               // program counter starts at 0x200
             pixel_buffer: vec![vec![false; 64]; 32], // 2048 pixels
             delay_timer: 0,
             sound_timer: 0,
@@ -85,122 +85,27 @@ impl Chip8 {
     }
 
     fn load_fonts(&mut self) {
-        let chip8_fontset: [u8; 80] =[
+        let chip8_fontset: [u8; 80] = [
             // Zero
-            0b11110000,
-            0b10010000,
-            0b10010000,
-            0b10010000,
-            0b11110000,
-
-            // One
-            0b00100000,
-            0b01100000,
-            0b00100000,
-            0b00100000,
-            0b01110000,
-
-            // Two
-            0b11110000,
-            0b00010000,
-            0b11110000,
-            0b10000000,
-            0b11110000,
-
-            // Three
-            0b11110000,
-            0b00010000,
-            0b11110000,
-            0b00010000,
-            0b11110000,
-
-            // Four
-            0b10010000,
-            0b10010000,
-            0b11110000,
-            0b00010000,
-            0b00010000,
-
-            // Five
-            0b11110000,
-            0b10000000,
-            0b11110000,
-            0b00010000,
-            0b11110000,
-
-            // Six
-            0b11110000,
-            0b10000000,
-            0b11110000,
-            0b10010000,
-            0b11110000,
-
-            // Seven
-            0b11110000,
-            0b00010000,
-            0b00100000,
-            0b01000000,
-            0b01000000,
-
-            // Eight
-            0b11110000,
-            0b10010000,
-            0b11110000,
-            0b10010000,
-            0b11110000,
-
-            // Nine
-            0b11110000,
-            0b10010000,
-            0b11110000,
-            0b00010000,
-            0b11110000,
-
-            // A
-            0b11110000,
-            0b10010000,
-            0b11110000,
-            0b10010000,
-            0b10010000,
-
-            // B
-            0b11100000,
-            0b10010000,
-            0b11100000,
-            0b10010000,
-            0b11100000,
-
-            // C
-            0b11110000,
-            0b10000000,
-            0b10000000,
-            0b10000000,
-            0b11110000,
-
-            // D
-            0b11100000,
-            0b10010000,
-            0b10010000,
-            0b10010000,
-            0b11100000,
-
-            // E
-            0b11110000,
-            0b10000000,
-            0b11110000,
-            0b10000000,
-            0b11110000,
-
-            // F
-            0b11110000,
-            0b10000000,
-            0b11110000,
-            0b10000000,
-            0b10000000,
+            0b11110000, 0b10010000, 0b10010000, 0b10010000, 0b11110000, // One
+            0b00100000, 0b01100000, 0b00100000, 0b00100000, 0b01110000, // Two
+            0b11110000, 0b00010000, 0b11110000, 0b10000000, 0b11110000, // Three
+            0b11110000, 0b00010000, 0b11110000, 0b00010000, 0b11110000, // Four
+            0b10010000, 0b10010000, 0b11110000, 0b00010000, 0b00010000, // Five
+            0b11110000, 0b10000000, 0b11110000, 0b00010000, 0b11110000, // Six
+            0b11110000, 0b10000000, 0b11110000, 0b10010000, 0b11110000, // Seven
+            0b11110000, 0b00010000, 0b00100000, 0b01000000, 0b01000000, // Eight
+            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b11110000, // Nine
+            0b11110000, 0b10010000, 0b11110000, 0b00010000, 0b11110000, // A
+            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b10010000, // B
+            0b11100000, 0b10010000, 0b11100000, 0b10010000, 0b11100000, // C
+            0b11110000, 0b10000000, 0b10000000, 0b10000000, 0b11110000, // D
+            0b11100000, 0b10010000, 0b10010000, 0b10010000, 0b11100000, // E
+            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b11110000, // F
+            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b10000000,
         ];
 
         self.memory[0x50..0xA0].copy_from_slice(&chip8_fontset);
-
     }
 
     fn decode(&mut self, oc: Opcode) -> Instruction {
@@ -248,31 +153,26 @@ impl Chip8 {
             0xD000 => {
                 let height = (oc & 0x000F) as u8;
                 Instruction::Draw(reg1, reg2, height)
-            },
-
-            0xE000 => {
-                match oc & 0x00FF {
-                    0x009E => Instruction::SkipIfKey(reg1),
-                    0x00A1 => Instruction::SkipIfNotKey(reg1),
-                    _ => Instruction::Noop
-                }
-            },
-
-            0xF000 => {
-                match oc & 0x00FF {
-                    0x0007 => Instruction::SetToDelayTimer(reg1),
-                    0x000A => Instruction::GetKeyPress(reg1),
-                    0x0015 => Instruction::SetDelayTimer(reg1),
-                    0x0018 => Instruction::SetSoundTimer(reg1),
-                    0x001E => Instruction::AddToIndexRegister(reg1),
-                    0x0029 => Instruction::SetIndexToSpriteAddr(reg1),
-                    0x0033 => Instruction::BCD(reg1),
-                    0x0055 => Instruction::DumpRegistersTill(reg1),
-                    0x0065 => Instruction::LoadRegistersTill(reg1),
-                    _ => Instruction::Noop,
-                }
             }
 
+            0xE000 => match oc & 0x00FF {
+                0x009E => Instruction::SkipIfKey(reg1),
+                0x00A1 => Instruction::SkipIfNotKey(reg1),
+                _ => Instruction::Noop,
+            },
+
+            0xF000 => match oc & 0x00FF {
+                0x0007 => Instruction::SetToDelayTimer(reg1),
+                0x000A => Instruction::GetKeyPress(reg1),
+                0x0015 => Instruction::SetDelayTimer(reg1),
+                0x0018 => Instruction::SetSoundTimer(reg1),
+                0x001E => Instruction::AddToIndexRegister(reg1),
+                0x0029 => Instruction::SetIndexToSpriteAddr(reg1),
+                0x0033 => Instruction::BCD(reg1),
+                0x0055 => Instruction::DumpRegistersTill(reg1),
+                0x0065 => Instruction::LoadRegistersTill(reg1),
+                _ => Instruction::Noop,
+            },
 
             _ => Instruction::Noop,
         };
@@ -388,21 +288,20 @@ impl Chip8 {
 
                 let mut did_overflow: bool = false;
                 for i in 0..height {
-                	for j in 0..8 {
-                		let new_val: bool = (self.memory[(self.index + 8*i + j) as usize] != 0);
-                		let tx = x+j;
-                		let ty = y+i;
-                		let cur_val = self.pixel_buffer[ty][tx];
-                		if cur_val != new_val {
-                			did_overflow = true;
-                		}
-                		self.pixel_buffer[ty][tx] = new_val;
-                	}
+                    for j in 0..8 {
+                        let new_val: bool = (self.memory[(self.index + 8 * i + j) as usize] != 0);
+                        let tx = x + j;
+                        let ty = y + i;
+                        let cur_val = self.pixel_buffer[ty][tx];
+                        if cur_val != new_val {
+                            did_overflow = true;
+                        }
+                        self.pixel_buffer[ty][tx] = new_val;
+                    }
                 }
 
                 self.registers[15] = if did_overflow { 1 } else { 0 };
                 self.render_framebuffer();
-
             }
             Instruction::SkipIfKey(reg) => {
                 self.pc += 2;
@@ -441,13 +340,13 @@ impl Chip8 {
             Instruction::SetIndexToSpriteAddr(reg) => {
                 self.pc += 2;
                 let vx = self.registers[reg];
-                self.index = 0x50 + (5*vx as usize);
+                self.index = 0x50 + (5 * vx as usize);
             }
             Instruction::BCD(reg) => {
                 self.pc += 2;
                 let mut vx = self.registers[reg];
                 for i in 0..3 {
-                    self.memory[self.index+2-i] =  vx%10;
+                    self.memory[self.index + 2 - i] = vx % 10;
                     vx /= 10;
                 }
             }
