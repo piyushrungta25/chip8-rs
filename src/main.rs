@@ -60,8 +60,7 @@ struct Chip8 {
     sound_timer: u8,
 
     call_stack: Vec<usize>,
-    sp: u8, // stack pointer
-    keypad: Vec<u8>,
+    keypad: Vec<bool>,
 }
 
 impl Chip8 {
@@ -76,8 +75,7 @@ impl Chip8 {
             sound_timer: 0,
 
             call_stack: vec![0; 16],
-            sp: 0,
-            keypad: vec![0; 16],
+            keypad: vec![false; 16],
         };
 
         c8.load_fonts();
@@ -283,13 +281,13 @@ impl Chip8 {
                 self.registers[reg] = random_byte & val;
             }
             Instruction::Draw(reg1, reg2, height) => {
-                let x = self.registers[reg1];
-                let y = self.registers[reg2];
+                let x = self.registers[reg1] as usize;
+                let y = self.registers[reg2] as usize;
 
                 let mut did_overflow: bool = false;
-                for i in 0..height {
-                    for j in 0..8 {
-                        let new_val: bool = (self.memory[(self.index + 8 * i + j) as usize] != 0);
+                for i in 0usize..(height as usize) {
+                    for j in 0usize..8 {
+                        let new_val: bool = self.memory[(self.index + 8 * i + j) as usize] != 0;
                         let tx = x + j;
                         let ty = y + i;
                         let cur_val = self.pixel_buffer[ty][tx];
@@ -305,13 +303,13 @@ impl Chip8 {
             }
             Instruction::SkipIfKey(reg) => {
                 self.pc += 2;
-                if self.get_key_press() == self.registers[reg] {
+                if self.keypad[self.registers[reg] as usize] {
                     self.pc += 2;
                 }
             }
             Instruction::SkipIfNotKey(reg) => {
                 self.pc += 2;
-                if self.get_key_press() != self.registers[reg] {
+                if !self.keypad[self.registers[reg] as usize] {
                     self.pc += 2;
                 }
             }
@@ -373,7 +371,7 @@ impl Chip8 {
     }
 
     fn clear_screen(&mut self) {
-        self.pixel_buffer = vec![false; 64 * 32];
+        self.pixel_buffer = vec![vec![false; 64]; 32];
     }
 
     fn fetch(&self) -> Opcode {
