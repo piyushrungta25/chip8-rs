@@ -3,7 +3,7 @@ extern crate sdl2;
 use rand::prelude::*;
 use std::{thread, time};
 use sdl2::pixels::Color;
-use sdl2::rect::{Point, Rect};
+use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::fs::File;
@@ -98,23 +98,22 @@ impl Chip8 {
 
     fn load_fonts(&mut self) {
         let chip8_fontset: [u8; 80] = [
-            // Zero
-            0b11110000, 0b10010000, 0b10010000, 0b10010000, 0b11110000, // One
-            0b00100000, 0b01100000, 0b00100000, 0b00100000, 0b01110000, // Two
-            0b11110000, 0b00010000, 0b11110000, 0b10000000, 0b11110000, // Three
-            0b11110000, 0b00010000, 0b11110000, 0b00010000, 0b11110000, // Four
-            0b10010000, 0b10010000, 0b11110000, 0b00010000, 0b00010000, // Five
-            0b11110000, 0b10000000, 0b11110000, 0b00010000, 0b11110000, // Six
-            0b11110000, 0b10000000, 0b11110000, 0b10010000, 0b11110000, // Seven
-            0b11110000, 0b00010000, 0b00100000, 0b01000000, 0b01000000, // Eight
-            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b11110000, // Nine
-            0b11110000, 0b10010000, 0b11110000, 0b00010000, 0b11110000, // A
-            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b10010000, // B
-            0b11100000, 0b10010000, 0b11100000, 0b10010000, 0b11100000, // C
-            0b11110000, 0b10000000, 0b10000000, 0b10000000, 0b11110000, // D
-            0b11100000, 0b10010000, 0b10010000, 0b10010000, 0b11100000, // E
-            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b11110000, // F
-            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b10000000,
+            0b11110000, 0b10010000, 0b10010000, 0b10010000, 0b11110000, // Zero
+            0b00100000, 0b01100000, 0b00100000, 0b00100000, 0b01110000, // One
+            0b11110000, 0b00010000, 0b11110000, 0b10000000, 0b11110000, // Two
+            0b11110000, 0b00010000, 0b11110000, 0b00010000, 0b11110000, // Three
+            0b10010000, 0b10010000, 0b11110000, 0b00010000, 0b00010000, // Four
+            0b11110000, 0b10000000, 0b11110000, 0b00010000, 0b11110000, // Five
+            0b11110000, 0b10000000, 0b11110000, 0b10010000, 0b11110000, // Six
+            0b11110000, 0b00010000, 0b00100000, 0b01000000, 0b01000000, // Seven
+            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b11110000, // Eight
+            0b11110000, 0b10010000, 0b11110000, 0b00010000, 0b11110000, // Nine
+            0b11110000, 0b10010000, 0b11110000, 0b10010000, 0b10010000, // A
+            0b11100000, 0b10010000, 0b11100000, 0b10010000, 0b11100000, // B
+            0b11110000, 0b10000000, 0b10000000, 0b10000000, 0b11110000, // C
+            0b11100000, 0b10010000, 0b10010000, 0b10010000, 0b11100000, // D
+            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b11110000, // E
+            0b11110000, 0b10000000, 0b11110000, 0b10000000, 0b10000000, // F
         ];
 
         self.memory[0x50..0xA0].copy_from_slice(&chip8_fontset);
@@ -125,6 +124,7 @@ impl Chip8 {
         let reg2: usize = ((oc & 0x00F0) >> 4) as usize;
         let nnn: usize = (oc & 0x0FFF) as usize;
         let nn: u8 = (oc & 0x00FF) as u8;
+        let n: u8 = (oc & 0x000F) as u8;
 
 
         return match oc & 0xF000 {
@@ -163,10 +163,7 @@ impl Chip8 {
             0xB000 => Instruction::JumpRelV0(nnn),
             0xC000 => Instruction::RandomAND(reg1, nn),
 
-            0xD000 => {
-                let height = (oc & 0x000F) as u8;
-                Instruction::Draw(reg1, reg2, height)
-            }
+            0xD000 => Instruction::Draw(reg1, reg2, n),
 
             0xE000 => match oc & 0x00FF {
                 0x009E => Instruction::SkipIfKey(reg1),
@@ -259,7 +256,7 @@ impl Chip8 {
                 let vx = self.registers[reg1];
                 let vy = self.registers[reg2];
 
-                self.registers[15] = if vx < vy { 1 } else { 0 };
+                self.registers[15] = if vx > vy { 1 } else { 0 };
                 self.registers[reg1] = vx.wrapping_sub(vy);
             }
             Instruction::SubRegisterToRegister87(reg1, reg2) => {
@@ -267,19 +264,19 @@ impl Chip8 {
                 let vx = self.registers[reg1];
                 let vy = self.registers[reg2];
 
-                self.registers[15] = if vx > vy { 1 } else { 0 };
+                self.registers[15] = if vx < vy { 1 } else { 0 };
                 self.registers[reg1] = vy.wrapping_sub(vx);
             }
             Instruction::ShiftRight(reg) => {
                 self.pc += 2;
                 let vx = self.registers[reg];
-                self.registers[15] = vx & 0x0001;
+                self.registers[15] = vx & 1;
                 self.registers[reg] = vx >> 1;
             }
             Instruction::ShiftLeft(reg) => {
                 self.pc += 2;
                 let vx = self.registers[reg];
-                self.registers[15] = if (vx & 0x10) > 1 { 1 } else { 0 };
+                self.registers[15] = (vx & 0b10000000) >> 7;
                 self.registers[reg] = vx << 1;
             }
             Instruction::SkipIfRegisterNotEqualRegister(reg1, reg2) => {
@@ -307,16 +304,20 @@ impl Chip8 {
 
                 let mut did_overflow: bool = false;
                 for i in 0usize..(height as usize) {
-                    let mut word = self.memory[self.index + i];
+                    let word = self.memory[self.index + i];
                     for j in 0usize..8 {
-                        let new_val: bool  = ( (word >> (7-j)) % 2) != 0;
-                        let tx = x + j;
-                        let ty = y + i;
-                        let cur_val = self.pixel_buffer[ty%32][tx%64];
-                        if cur_val != new_val {
+                        let new_val: bool  = ( (word >> (7-j)) & 1) != 0;
+                        let tx = (x + j)%64;
+                        let ty = (y + i)%32;
+                        let cur_val = self.pixel_buffer[ty][tx];
+                        if cur_val==true && new_val==false {
                             did_overflow = true;
                         }
-                        self.pixel_buffer[ty%32][tx%64] = new_val;
+                        if new_val {
+                            self.pixel_buffer[ty][tx] = !cur_val;
+
+                        }
+
                     }
                 }
 
@@ -324,24 +325,24 @@ impl Chip8 {
                 self.rerender();
             }
             Instruction::SkipIfKey(reg) => {
-                self.pc += 2;
-                if self.keypad[self.registers[reg] as usize] {
-                    self.pc += 2;
-                }
+                self.pc += 2;  // TODO
+                // if self.keypad[self.registers[reg] as usize] {
+                //     self.pc += 2;
+                // }
             }
             Instruction::SkipIfNotKey(reg) => {
-                self.pc += 2;
-                if !self.keypad[self.registers[reg] as usize] {
-                    self.pc += 2;
-                }
+                self.pc += 2;  // TODO
+                // if !self.keypad[self.registers[reg] as usize] {
+                //     self.pc += 2;
+                // }
             }
             Instruction::SetToDelayTimer(reg) => {
                 self.pc += 2;
                 self.registers[reg] = self.delay_timer;
             }
             Instruction::GetKeyPress(reg) => {
-                self.pc += 2;
-                self.registers[reg] = self.get_key_press();
+                self.pc += 2;  // TODO
+                // self.registers[reg] = self.get_key_press();
             }
             Instruction::SetDelayTimer(reg) => {
                 self.pc += 2;
@@ -353,9 +354,8 @@ impl Chip8 {
             }
             Instruction::AddToIndexRegister(reg) => {
                 self.pc += 2;
-                let (res, overflow) = self.index.overflowing_add(self.registers[reg] as usize);
-                self.index = res;
-                self.registers[15] = if overflow { 1 } else { 0 };
+                self.index += (self.registers[reg] as usize);
+                self.registers[15] = if self.index > 0x0F00 { 1 } else { 0 };
             }
             Instruction::SetIndexToSpriteAddr(reg) => {
                 self.pc += 2;
@@ -395,7 +395,7 @@ impl Chip8 {
         for y in 0..32 {
             for x in 0..64 {
                 if self.pixel_buffer[y][x] {
-                    self.canvas.fill_rect(Rect::new((x*10) as i32, (y*10) as i32, 10, 10));
+                    self.canvas.fill_rect(Rect::new((x*10) as i32, (y*10) as i32, 10, 10)).unwrap();
                 }
             }
         }
@@ -446,7 +446,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let mut window = video_subsystem.window("rust-sdl2 demo", 640, 320)
+    let window = video_subsystem.window("rust-sdl2 demo", 640, 320)
         .position_centered()
         .build()
         .unwrap();
@@ -461,7 +461,8 @@ fn main() {
     let mut data: Vec<u8> = Vec::new();
     // File::open("roms/INVADERS").unwrap().read_to_end(&mut data);
     // File::open("roms/UFO").unwrap().read_to_end(&mut data);
-    File::open("roms/TETRIS").unwrap().read_to_end(&mut data);
+    File::open("roms/TETRIS").unwrap().read_to_end(&mut data).unwrap();
+    // File::open("roms/TANK").unwrap().read_to_end(&mut data).unwrap();
 
     // this should put 5 in top left corner
     // let mut data: Vec<u8> = vec![0x00, 0xE0, 0x61, 0x0d, 0xF1, 0x29, 0x61, 0x3e, 0x62, 0x03, 0xD1, 0x25, 0x00, 0x0F, 0x12, 0x0C];
