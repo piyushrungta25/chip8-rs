@@ -24,3 +24,8 @@ The following resources have been a huge help
 - https://en.wikipedia.org/wiki/CHIP-8
 - http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 - http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
+
+
+## License
+
+Licensed under GPLv3. Sample games included in `roms` directory are written by other authors and are under other licenses.
