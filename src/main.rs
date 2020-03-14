@@ -356,7 +356,7 @@ impl Chip8 {
             Instruction::AddToIndexRegister(reg) => {
                 self.pc += 2;
                 self.index += (self.registers[reg] as usize);
-                self.registers[15] = if self.index > 0x0F00 { 1 } else { 0 };
+                self.registers[15] = if self.index > 0x0FFF { 1 } else { 0 };
             }
             Instruction::SetIndexToSpriteAddr(reg) => {
                 self.pc += 2;
