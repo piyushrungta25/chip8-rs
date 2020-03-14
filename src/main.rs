@@ -1,6 +1,7 @@
 extern crate sdl2;
 
 use rand::prelude::*;
+use sdl2::audio::{AudioCallback, AudioSpecDesired, AudioDevice};
 use sdl2::event::{Event, EventType};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -10,6 +11,28 @@ use sdl2::video::Window;
 use std::fs::File;
 use std::io::Read;
 use std::{thread, time};
+
+struct SquareWave {
+    phase_inc: f32,
+    phase: f32,
+    volume: f32,
+}
+
+impl AudioCallback for SquareWave {
+    type Channel = f32;
+
+    fn callback(&mut self, out: &mut [f32]) {
+        // Generate a square wave
+        for x in out.iter_mut() {
+            *x = if self.phase <= 0.5 {
+                self.volume
+            } else {
+                -self.volume
+            };
+            self.phase = (self.phase + self.phase_inc) % 1.0;
+        }
+    }
+}
 
 type Opcode = u16;
 
@@ -74,10 +97,11 @@ struct Chip8 {
     keypad: Vec<bool>,
 
     canvas: Canvas<Window>,
+    audio_device: AudioDevice<SquareWave>,
 }
 
 impl Chip8 {
-    fn new(canvas: Canvas<Window>) -> Self {
+    fn new(canvas: Canvas<Window>, audio_device: AudioDevice<SquareWave>) -> Self {
         let mut c8 = Chip8 {
             memory: vec![0; 4096],  // 4k memory
             registers: vec![0; 16], // 16 8-bit registers
@@ -90,6 +114,7 @@ impl Chip8 {
             call_stack: vec![0; 16],
             keypad: vec![false; 16],
             canvas,
+          audio_device,
         };
 
         c8.load_fonts();
@@ -310,8 +335,8 @@ impl Chip8 {
                     for j in 0usize..8 {
                         let tx = (x + j) % 64;
                         let ty = (y + i) % 32;
-                        if (word & (0x80 >> j) != 0) {
-                            if (self.pixel_buffer[ty][tx] == true) {
+                        if word & (0x80 >> j) != 0 {
+                            if self.pixel_buffer[ty][tx] == true {
                                 did_overflow = true;
                             }
                             self.pixel_buffer[ty][tx] = !self.pixel_buffer[ty][tx];
@@ -357,7 +382,7 @@ impl Chip8 {
             }
             Instruction::AddToIndexRegister(reg) => {
                 self.pc += 2;
-                self.index += (self.registers[reg] as usize);
+                self.index += self.registers[reg] as usize;
                 self.registers[15] = if self.index > 0x0FFF { 1 } else { 0 };
             }
             Instruction::SetIndexToSpriteAddr(reg) => {
@@ -417,7 +442,7 @@ impl Chip8 {
         // +-+-+-+-+                +-+-+-+-+
         // |A|0|B|F|                |Z|X|C|V|
         // +-+-+-+-+                +-+-+-+-+
-        let mut value = match event {
+        let value = match event {
             EventType::KeyDown { .. } => Some(true),
             EventType::KeyUp { .. } => Some(false),
             _ => None,
@@ -462,9 +487,10 @@ impl Chip8 {
 
     fn update_sound_timer(&mut self) {
         if self.sound_timer > 0 {
-            println!("beep beep!");
+            self.audio_device.resume();
             self.sound_timer -= 1;
         }
+        self.audio_device.pause();
     }
 
     fn sleep() {
@@ -474,38 +500,51 @@ impl Chip8 {
     fn load_rom(&mut self, data: Vec<u8>) {
         self.memory[0x200..(0x200 + data.len())].copy_from_slice(&data);
     }
-
 }
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
 
     let window = video_subsystem
         .window("rust-sdl2 demo", 640, 320)
         .position_centered()
         .build()
         .unwrap();
-    // window.set_fullscreen(FullscreenType::True).unwrap();
     let mut canvas = window.into_canvas().build().unwrap();
 
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
+
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1), // mono
+        samples: None,     // default sample size
+    };
+
+    let device = audio_subsystem
+        .open_playback(None, &desired_spec, |spec| {
+            // initialize the audio callback
+            SquareWave {
+                phase_inc: 440.0 / spec.freq as f32,
+                phase: 0.0,
+                volume: 0.25,
+            }
+        })
+        .unwrap();
+    device.resume();
     canvas.present();
-    let mut c8 = Chip8::new(canvas);
+    let mut c8 = Chip8::new(canvas, device);
 
     let mut data: Vec<u8> = Vec::new();
-    //File::open("roms/INVADERS").unwrap().read_to_end(&mut data);
-    // File::open("roms/UFO").unwrap().read_to_end(&mut data);
     File::open("roms/TETRIS")
         .unwrap()
         .read_to_end(&mut data)
         .unwrap();
-    // File::open("roms/TANK").unwrap().read_to_end(&mut data).unwrap();
-    //File::open("/tmp/CHIP-8-Emulator/roms/TETRIS").unwrap().read_to_end(&mut data).unwrap();
 
     // this should wait for a keypress and then put a character on the screen
-    //let mut data: Vec<u8> = vec![
+    // let mut data: Vec<u8> = vec![
     //    0xF1, 0x0A, // wait for key press
     //    0x00, 0xE0, // clear the screen
     //    0x61, 0x03, // set v1 to 05
@@ -515,7 +554,7 @@ fn main() {
     //    0xD1, 0x25, // draw at location in v1 and v2 for height of 5
     //    0x00, 0x0F,
     //    0x12, 0x0C, // jump to address 20c
-    //];
+    // ];
 
     c8.load_rom(data);
     let mut event_pump = sdl_context.event_pump().unwrap();
