@@ -1,15 +1,15 @@
 extern crate sdl2;
 
 use rand::prelude::*;
-use std::{thread, time};
+use sdl2::event::{Event, EventType};
+use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::fs::File;
 use std::io::Read;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use std::{thread, time};
 
 type Opcode = u16;
 
@@ -89,7 +89,7 @@ impl Chip8 {
 
             call_stack: vec![0; 16],
             keypad: vec![false; 16],
-            canvas
+            canvas,
         };
 
         c8.load_fonts();
@@ -125,7 +125,6 @@ impl Chip8 {
         let nnn: usize = (oc & 0x0FFF) as usize;
         let nn: u8 = (oc & 0x00FF) as u8;
         let n: u8 = (oc & 0x000F) as u8;
-
 
         return match oc & 0xF000 {
             0x0000 => match oc & 0x00FF {
@@ -200,7 +199,7 @@ impl Chip8 {
             }
             Instruction::JumpTo(addr) => self.pc = addr,
             Instruction::Subroutine(addr) => {
-                self.call_stack.push(self.pc+2);
+                self.call_stack.push(self.pc + 2);
                 self.pc = addr;
             }
             Instruction::SkipIfRegisterEqualValue(reg, val) => {
@@ -302,23 +301,21 @@ impl Chip8 {
                 self.pc += 2;
                 let x = self.registers[reg1] as usize;
                 let y = self.registers[reg2] as usize;
+                self.registers[15] = 0;
 
                 let mut did_overflow: bool = false;
+
                 for i in 0usize..(height as usize) {
                     let word = self.memory[self.index + i];
                     for j in 0usize..8 {
-                        let new_val: bool  = ( (word >> (7-j)) & 1) != 0;
-                        let tx = (x + j)%64;
-                        let ty = (y + i)%32;
-                        let cur_val = self.pixel_buffer[ty][tx];
-                        if cur_val==true && new_val==false {
-                            did_overflow = true;
+                        let tx = (x + j) % 64;
+                        let ty = (y + i) % 32;
+                        if (word & (0x80 >> j) != 0) {
+                            if (self.pixel_buffer[ty][tx] == true) {
+                                did_overflow = true;
+                            }
+                            self.pixel_buffer[ty][tx] = !self.pixel_buffer[ty][tx];
                         }
-                        if new_val {
-                            self.pixel_buffer[ty][tx] = !cur_val;
-
-                        }
-
                     }
                 }
 
@@ -326,24 +323,29 @@ impl Chip8 {
                 self.rerender();
             }
             Instruction::SkipIfKey(reg) => {
-                self.pc += 2;  // TODO
-                // if self.keypad[self.registers[reg] as usize] {
-                //     self.pc += 2;
-                // }
+                self.pc += 2;
+                if self.keypad[self.registers[reg] as usize] {
+                    self.pc += 2;
+                }
             }
             Instruction::SkipIfNotKey(reg) => {
-                self.pc += 4;  // TODO
-                // if !self.keypad[self.registers[reg] as usize] {
-                //     self.pc += 2;
-                // }
+                self.pc += 2;
+                if !self.keypad[self.registers[reg] as usize] {
+                    self.pc += 2;
+                }
             }
             Instruction::SetToDelayTimer(reg) => {
                 self.pc += 2;
                 self.registers[reg] = self.delay_timer;
             }
             Instruction::GetKeyPress(reg) => {
-                self.pc += 2;  // TODO
-                // self.registers[reg] = self.get_key_press();
+                for i in 0..16 {
+                    if self.keypad[i] {
+                        self.pc += 2;
+                        self.registers[reg] = i as u8;
+                        return;
+                    }
+                }
             }
             Instruction::SetDelayTimer(reg) => {
                 self.pc += 2;
@@ -366,9 +368,9 @@ impl Chip8 {
             Instruction::BCD(reg) => {
                 self.pc += 2;
                 let vx = self.registers[reg];
-                self.memory[self.index] = vx/100;
-                self.memory[self.index + 1] = (vx/10)%10;
-                self.memory[self.index + 2] = vx%10;
+                self.memory[self.index] = vx / 100;
+                self.memory[self.index + 1] = (vx / 10) % 10;
+                self.memory[self.index + 2] = vx % 10;
             }
             Instruction::DumpRegistersTill(reg) => {
                 self.pc += 2;
@@ -387,26 +389,60 @@ impl Chip8 {
         }
     }
 
-
-
     fn rerender(&mut self) {
-        self.canvas.set_draw_color(Color::RGB(0,0,0));
+        self.canvas.set_draw_color(Color::RGB(0, 0, 0));
         self.canvas.clear();
-        self.canvas.set_draw_color(Color::RGB(255,255,255));
+        self.canvas.set_draw_color(Color::RGB(255, 255, 255));
         for y in 0..32 {
             for x in 0..64 {
                 if self.pixel_buffer[y][x] {
-                    self.canvas.fill_rect(Rect::new((x*10) as i32, (y*10) as i32, 10, 10)).unwrap();
+                    self.canvas
+                        .fill_rect(Rect::new((x * 10) as i32, (y * 10) as i32, 10, 10))
+                        .unwrap();
                 }
             }
         }
         self.canvas.present();
     }
 
+    fn handle_key_press(&mut self, event: EventType, key: Keycode) {
+        // the qwerty keys are mapped in the following manner
+        // Keypad                   QWERTY
+        // +-+-+-+-+                +-+-+-+-+
+        // |1|2|3|C|                |1|2|3|4|
+        // +-+-+-+-+                +-+-+-+-+
+        // |4|5|6|D|                |Q|W|E|R|
+        // +-+-+-+-+       =>       +-+-+-+-+
+        // |7|8|9|E|                |A|S|D|F|
+        // +-+-+-+-+                +-+-+-+-+
+        // |A|0|B|F|                |Z|X|C|V|
+        // +-+-+-+-+                +-+-+-+-+
+        let mut value = match event {
+            EventType::KeyDown { .. } => Some(true),
+            EventType::KeyUp { .. } => Some(false),
+            _ => None,
+        }
+        .unwrap();
 
-    fn get_key_press(&mut self) -> u8 {
-        // TODO this should be blocking
-        return '1' as u8;
+        match key {
+            Keycode::Num1 => self.keypad[0x1] = value,
+            Keycode::Num2 => self.keypad[0x2] = value,
+            Keycode::Num3 => self.keypad[0x3] = value,
+            Keycode::Q => self.keypad[0x4] = value,
+            Keycode::W => self.keypad[0x5] = value,
+            Keycode::E => self.keypad[0x6] = value,
+            Keycode::A => self.keypad[0x7] = value,
+            Keycode::S => self.keypad[0x8] = value,
+            Keycode::D => self.keypad[0x9] = value,
+            Keycode::X => self.keypad[0x0] = value,
+            Keycode::Z => self.keypad[0xa] = value,
+            Keycode::C => self.keypad[0xb] = value,
+            Keycode::Num4 => self.keypad[0xc] = value,
+            Keycode::R => self.keypad[0xd] = value,
+            Keycode::F => self.keypad[0xe] = value,
+            Keycode::V => self.keypad[0xf] = value,
+            _ => {}
+        }
     }
 
     fn clear_screen(&mut self) {
@@ -432,41 +468,54 @@ impl Chip8 {
     }
 
     fn sleep() {
-        thread::sleep(time::Duration::from_millis(1));
+        thread::sleep(time::Duration::from_millis(5));
     }
 
     fn load_rom(&mut self, data: Vec<u8>) {
         self.memory[0x200..(0x200 + data.len())].copy_from_slice(&data);
-
     }
 
 }
 
 fn main() {
-
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo", 640, 320)
+    let window = video_subsystem
+        .window("rust-sdl2 demo", 640, 320)
         .position_centered()
         .build()
         .unwrap();
     // window.set_fullscreen(FullscreenType::True).unwrap();
     let mut canvas = window.into_canvas().build().unwrap();
 
-    canvas.set_draw_color(Color::RGB(0,0,0));
+    canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
     canvas.present();
     let mut c8 = Chip8::new(canvas);
 
     let mut data: Vec<u8> = Vec::new();
-    // File::open("roms/INVADERS").unwrap().read_to_end(&mut data);
+    //File::open("roms/INVADERS").unwrap().read_to_end(&mut data);
     // File::open("roms/UFO").unwrap().read_to_end(&mut data);
-    File::open("roms/TETRIS").unwrap().read_to_end(&mut data).unwrap();
+    File::open("roms/TETRIS")
+        .unwrap()
+        .read_to_end(&mut data)
+        .unwrap();
     // File::open("roms/TANK").unwrap().read_to_end(&mut data).unwrap();
+    //File::open("/tmp/CHIP-8-Emulator/roms/TETRIS").unwrap().read_to_end(&mut data).unwrap();
 
-    // this should put 5 in top left corner
-    // let mut data: Vec<u8> = vec![0x00, 0xE0, 0x61, 0x0d, 0xF1, 0x29, 0x61, 0x3e, 0x62, 0x03, 0xD1, 0x25, 0x00, 0x0F, 0x12, 0x0C];
+    // this should wait for a keypress and then put a character on the screen
+    //let mut data: Vec<u8> = vec![
+    //    0xF1, 0x0A, // wait for key press
+    //    0x00, 0xE0, // clear the screen
+    //    0x61, 0x03, // set v1 to 05
+    //    0xF1, 0x29, // set i to location of character in v1
+    //    0x61, 0x38, // set v1 to 38
+    //    0x62, 0x00, // set v2 to 00
+    //    0xD1, 0x25, // draw at location in v1 and v2 for height of 5
+    //    0x00, 0x0F,
+    //    0x12, 0x0C, // jump to address 20c
+    //];
 
     c8.load_rom(data);
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -474,10 +523,17 @@ fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} |
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running
-                },
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => c8.handle_key_press(EventType::KeyDown, key),
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } => c8.handle_key_press(EventType::KeyUp, key),
                 _ => {}
             }
         }
