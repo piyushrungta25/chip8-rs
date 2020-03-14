@@ -1,15 +1,17 @@
 extern crate sdl2;
 
 use rand::prelude::*;
-use sdl2::audio::{AudioCallback, AudioSpecDesired, AudioDevice};
+use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use sdl2::event::{Event, EventType};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
+use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::process::exit;
 use std::{thread, time};
 
 struct SquareWave {
@@ -114,7 +116,7 @@ impl Chip8 {
             call_stack: vec![0; 16],
             keypad: vec![false; 16],
             canvas,
-          audio_device,
+            audio_device,
         };
 
         c8.load_fonts();
@@ -503,6 +505,11 @@ impl Chip8 {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let file_path = args.get(1).unwrap_or_else(|| {
+        eprintln!("Error: Usage - cargo run -- /path/to/rom");
+        exit(1);
+    });
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let audio_subsystem = sdl_context.audio().unwrap();
@@ -538,7 +545,7 @@ fn main() {
     let mut c8 = Chip8::new(canvas, device);
 
     let mut data: Vec<u8> = Vec::new();
-    File::open("roms/TETRIS")
+    File::open(file_path)
         .unwrap()
         .read_to_end(&mut data)
         .unwrap();
