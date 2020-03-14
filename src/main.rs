@@ -277,7 +277,7 @@ impl Chip8 {
             Instruction::ShiftLeft(reg) => {
                 self.pc += 2;
                 let vx = self.registers[reg];
-                self.registers[15] = (vx & 0b10000000) >> 7;
+                self.registers[15] = vx >> 7;
                 self.registers[reg] = vx << 1;
             }
             Instruction::SkipIfRegisterNotEqualRegister(reg1, reg2) => {
@@ -332,7 +332,7 @@ impl Chip8 {
                 // }
             }
             Instruction::SkipIfNotKey(reg) => {
-                self.pc += 2;  // TODO
+                self.pc += 4;  // TODO
                 // if !self.keypad[self.registers[reg] as usize] {
                 //     self.pc += 2;
                 // }
