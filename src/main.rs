@@ -247,16 +247,17 @@ impl Chip8 {
             }
             Instruction::AddRegisterToRegister(reg1, reg2) => {
                 self.pc += 2;
-                let (res, overflow) = self.registers[reg1].overflowing_add(self.registers[reg2]);
-                self.registers[reg1] = res;
-                self.registers[15] = if overflow { 1 } else { 0 };
+                self.registers[reg1] = self.registers[reg1].wrapping_add(self.registers[reg2]);
+                let (_, overflow) = self.registers[reg1].overflowing_add(self.registers[reg2]);
+                // self.registers[reg1] = res;
+                self.registers[0xF] = if overflow { 1 } else { 0 };
             }
             Instruction::SubRegisterToRegister85(reg1, reg2) => {
                 self.pc += 2;
                 let vx = self.registers[reg1];
                 let vy = self.registers[reg2];
 
-                self.registers[15] = if vx > vy { 1 } else { 0 };
+                self.registers[15] = if vx >= vy { 1 } else { 0 }; // borrow does not occur
                 self.registers[reg1] = vx.wrapping_sub(vy);
             }
             Instruction::SubRegisterToRegister87(reg1, reg2) => {
@@ -264,7 +265,7 @@ impl Chip8 {
                 let vx = self.registers[reg1];
                 let vy = self.registers[reg2];
 
-                self.registers[15] = if vx < vy { 1 } else { 0 };
+                self.registers[15] = if vx <= vy { 1 } else { 0 }; // borrow does not occur
                 self.registers[reg1] = vy.wrapping_sub(vx);
             }
             Instruction::ShiftRight(reg) => {
