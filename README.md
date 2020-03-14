@@ -1,5 +1,5 @@
 # chip8-rs
-Chip-8 emulator, written in rust. Some freely available games are included in `roms` directory.
+Chip-8 emulator, written in rust, complete with keyboard and sound support. Some freely available games are included in `roms` directory.
 
 <img src="assets/out.gif">
 
